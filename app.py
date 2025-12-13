@@ -93,7 +93,6 @@ def build_index(pdf_path: str):
 def get_query_engine(index: VectorStoreIndex):
     """
     Creates a query engine with Reranking and updates the prompt template.
-    Relies on st.session_state.prompt being set in the main script.
     """
     retriever = VectorIndexRetriever(index=index, similarity_top_k=10)
 
@@ -150,7 +149,7 @@ if "prompt" not in st.session_state:
 
 
 with st.sidebar:
-    # --- FINAL FIX: Removed max_uploader_size argument to fix TypeError ---
+    # --- FIX: Removed max_uploader_size/limit argument to fix TypeError ---
     uploaded = st.file_uploader("Upload financial PDF", type="pdf")
 
 if uploaded:
@@ -165,6 +164,9 @@ if uploaded:
     os.unlink(pdf_path)
     st.success("Document indexed successfully!")
 
+# --- FIX: Create an empty container to prevent stacking answers ---
+answer_placeholder = st.empty() 
+
 query = st.text_input(
     "Ask a question about the report",
     disabled="engine" not in st.session_state,
@@ -174,12 +176,14 @@ if query and "engine" in st.session_state:
     with st.spinner("Analyzing…"):
         response = st.session_state.engine.query(query)
 
-    st.markdown(
-        f"""
-        <div style="background:#1a1a1a;padding:20px;border-radius:12px">
-            <h3>Answer</h3>
-            <p>{response.response}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Use the placeholder to display the answer, replacing any previous content
+    with answer_placeholder.container():
+        st.markdown(
+            f"""
+            <div style="background:#1a1a1a;padding:20px;border-radius:12px">
+                <h3>Answer</h3>
+                <p>{response.response}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
