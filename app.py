@@ -155,7 +155,7 @@ if "prompt" not in st.session_state:
 
 
 with st.sidebar:
-    uploaded = st.file_uploader("Upload financial PDF", type="pdf", limit=200 * 1024 * 1024)
+   uploaded = st.file_uploader("Upload financial PDF", type="pdf", max_uploader_size=200 * 1024 * 1024)
 
 if uploaded:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
