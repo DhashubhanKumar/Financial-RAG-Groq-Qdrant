@@ -1,65 +1,63 @@
 import os
-os.environ["NLTK_DATA"] = "/tmp/nltk_data"
+os.environ["NLTK_DATA"] = "/tmp/nltk"
 
 import nltk
 try:
     nltk.data.find("corpora/stopwords")
 except LookupError:
-    nltk.download("stopwords", download_dir="/tmp/nltk_data", quiet=True)
+    nltk.download("stopwords", download_dir="/tmp/nltk", quiet=True)
 
 import streamlit as st
 import tempfile
 from pathlib import Path
-
 import qdrant_client
 
-from llama_index.core import (
+from llama_index import (
     VectorStoreIndex,
     SimpleDirectoryReader,
     Settings,
 )
 from llama_index.llms.groq import Groq
 from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.core.storage import StorageContext
-from llama_index.core.retrievers import VectorIndexRetriever
-from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.prompts import ChatPromptTemplate, MessageRole
-from llama_index.core.llms import ChatMessage
+from llama_index.storage.storage_context import StorageContext
+from llama_index.retrievers import VectorIndexRetriever
+from llama_index.query_engine import RetrieverQueryEngine
+from llama_index.prompts import ChatPromptTemplate
+from llama_index.llms import ChatMessage, MessageRole
 
 
 # =====================
-# CONFIG
+# SECRETS
 # =====================
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
-QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
+GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+QDRANT_ENDPOINT = os.environ["QDRANT_ENDPOINT"]
+QDRANT_API_KEY = os.environ["QDRANT_API_KEY"]
 
 COLLECTION_NAME = "financial-rag-final"
 
 
 # =====================
-# INIT MODELS
+# INIT
 # =====================
 
 @st.cache_resource
-def initialize_models():
+def init_models():
     Settings.llm = Groq(
         model="llama-3.1-8b-instant",
         api_key=GROQ_API_KEY,
     )
 
-    SYSTEM_PROMPT = (
-        "You are a financial analyst.\n"
-        "Rules:\n"
-        "1. Answer ONLY using document context.\n"
-        "2. If answer not found, say so.\n"
-        "3. Cite page numbers using 'page_label'."
-    )
-
-    st.session_state.chat_template = ChatPromptTemplate(
+    st.session_state.prompt = ChatPromptTemplate(
         message_templates=[
-            ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
+            ChatMessage(
+                role=MessageRole.SYSTEM,
+                content=(
+                    "You are a financial analyst. "
+                    "Answer ONLY from the provided document context. "
+                    "If not found, say so. Cite page numbers using page_label."
+                ),
+            ),
             ChatMessage(
                 role=MessageRole.USER,
                 content="Context:\n{context_str}\n\nQuestion:\n{query_str}",
@@ -67,18 +65,17 @@ def initialize_models():
         ]
     )
 
-initialize_models()
+init_models()
 
 
 # =====================
-# INDEXING
+# INDEX
 # =====================
 
 def build_index(pdf_path: str):
     client = qdrant_client.QdrantClient(
         url=f"https://{QDRANT_ENDPOINT}",
         api_key=QDRANT_API_KEY,
-        timeout=60,
     )
 
     try:
@@ -89,7 +86,6 @@ def build_index(pdf_path: str):
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
-        enable_hybrid=True,
     )
 
     storage_context = StorageContext.from_defaults(
@@ -106,70 +102,41 @@ def build_index(pdf_path: str):
     )
 
 
-def get_query_engine(index):
-    retriever = VectorIndexRetriever(
-        index=index,
-        similarity_top_k=8,
-    )
+def make_query_engine(index):
+    retriever = VectorIndexRetriever(index=index, similarity_top_k=8)
 
-    query_engine = RetrieverQueryEngine(
-        retriever=retriever
+    engine = RetrieverQueryEngine(retriever=retriever)
+    engine.update_prompts(
+        {"response_synthesizer:text_qa_template": st.session_state.prompt}
     )
-
-    query_engine.update_prompts(
-        {"response_synthesizer:text_qa_template": st.session_state.chat_template}
-    )
-
-    return query_engine
+    return engine
 
 
 # =====================
 # UI
 # =====================
 
-st.set_page_config(page_title="Financial RAG Analyst", layout="wide")
+st.set_page_config("Financial RAG Analyst", layout="wide")
 st.title("📊 Financial RAG Analyst (Groq + Qdrant)")
 st.markdown("---")
 
-with st.sidebar:
-    uploaded_file = st.file_uploader("Upload financial PDF", type="pdf")
+uploaded = st.file_uploader("Upload a financial PDF", type="pdf")
 
-query_enabled = False
+if uploaded:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+        f.write(uploaded.read())
+        path = f.name
 
-if uploaded_file:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp.write(uploaded_file.read())
-        pdf_path = tmp.name
+    with st.spinner("Indexing document…"):
+        st.session_state.index = build_index(path)
+        st.session_state.engine = make_query_engine(st.session_state.index)
 
-    with st.spinner("Indexing document..."):
-        st.session_state.index = build_index(pdf_path)
-        st.session_state.query_engine = get_query_engine(
-            st.session_state.index
-        )
-
-    query_enabled = True
+    os.unlink(path)
     st.success("✅ Document indexed!")
 
-    os.unlink(pdf_path)
-
-else:
-    st.info("Upload a PDF to begin.")
-
-query = st.text_input(
-    "Ask a question:",
-    disabled=not query_enabled
-)
-
-if query and query_enabled:
-    with st.spinner("Analyzing..."):
-        response = st.session_state.query_engine.query(query)
-
-    st.markdown(
-        f"""
-        <div style="background:#1a1a1a;padding:20px;border-radius:10px">
-            <h3>Answer</h3>
-            <p>{response.response}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+if "engine" in st.session_state:
+    q = st.text_input("Ask a question")
+    if q:
+        with st.spinner("Thinking…"):
+            res = st.session_state.engine.query(q)
+        st.markdown(res.response)
