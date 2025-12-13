@@ -1,5 +1,14 @@
-import streamlit as st
+# =====================
+# 🔥 CRITICAL CLOUD FIX (MUST BE FIRST)
+# =====================
 import os
+os.environ["LLAMA_INDEX_DISABLE_NLTK"] = "1"
+os.environ["NLTK_DATA"] = "/tmp/nltk_data"
+
+# =====================
+# STANDARD IMPORTS
+# =====================
+import streamlit as st
 import tempfile
 from pathlib import Path
 
@@ -20,45 +29,38 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.prompts import ChatPromptTemplate, MessageRole
 from llama_index.core.llms import ChatMessage
 
-
 # =====================
 # CONFIGURATION & SECRETS
 # =====================
-
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
 
 COLLECTION_NAME = "financial-rag-final"
 
-
 # =====================
 # INITIALIZE MODELS
 # =====================
-
 @st.cache_resource
 def initialize_models():
     if not GROQ_API_KEY:
-        st.error("GROQ_API_KEY not found in Streamlit secrets.")
-        return None
+        st.error("❌ GROQ_API_KEY missing in Streamlit secrets")
+        st.stop()
 
-    # LLM (Groq)
     Settings.llm = Groq(
         model="llama-3.1-8b-instant",
         api_key=GROQ_API_KEY,
     )
 
-    # Embeddings (local, cloud-safe)
     Settings.embed_model = HuggingFaceEmbedding(
         model_name="BAAI/bge-small-en-v1.5"
     )
 
-    # Strict system prompt
     SYSTEM_PROMPT = (
         "You are a highly skilled financial analyst.\n"
         "Rules:\n"
         "1. Answer ONLY using the retrieved document context.\n"
-        "2. If the answer is not found, say so explicitly.\n"
+        "2. If information is missing, say so clearly.\n"
         "3. Cite page numbers using metadata field 'page_label'."
     )
 
@@ -72,24 +74,20 @@ def initialize_models():
         ]
     )
 
-    return Settings.llm
-
-
 # =====================
 # INDEX BUILDING
 # =====================
-
 def build_index(pdf_path: str):
     client = qdrant_client.QdrantClient(
         url=f"https://{QDRANT_ENDPOINT}",
         api_key=QDRANT_API_KEY,
-        prefer_grpc=False,
         timeout=60,
     )
 
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
+        embed_dim=Settings.embed_model.get_text_embedding_dim(),
     )
 
     storage_context = StorageContext.from_defaults(
@@ -105,7 +103,6 @@ def build_index(pdf_path: str):
         storage_context=storage_context,
         show_progress=True,
     )
-
 
 def get_query_engine(index: VectorStoreIndex):
     retriever = VectorIndexRetriever(
@@ -129,23 +126,12 @@ def get_query_engine(index: VectorStoreIndex):
 
     return query_engine
 
-
 # =====================
 # STREAMLIT UI
 # =====================
-
 st.set_page_config(
     page_title="Financial RAG Analyst (Groq + Qdrant)",
     layout="wide",
-)
-
-st.markdown(
-    """
-    <style>
-    body { background-color: #000; color: #fff; }
-    </style>
-    """,
-    unsafe_allow_html=True,
 )
 
 st.title("📊 Financial RAG Analyst (Groq + Qdrant)")
@@ -167,10 +153,7 @@ if uploaded_file:
         tmp.write(uploaded_file.read())
         pdf_path = tmp.name
 
-    if (
-        "current_file" not in st.session_state
-        or st.session_state.current_file != uploaded_file.name
-    ):
+    if st.session_state.get("current_file") != uploaded_file.name:
         st.session_state.current_file = uploaded_file.name
 
         with st.spinner("Indexing document (first time only)..."):
@@ -182,9 +165,7 @@ if uploaded_file:
         st.success("✅ Document indexed and ready!")
 
     query_enabled = True
-
-    if os.path.exists(pdf_path):
-        os.unlink(pdf_path)
+    os.unlink(pdf_path)
 
 else:
     st.info("Upload a PDF to begin.")
