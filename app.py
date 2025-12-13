@@ -57,8 +57,6 @@ def init_models():
         model_name="BAAI/bge-small-en-v1.5"
     )
 
-    # Note: st.session_state.prompt is no longer set here due to the error.
-
 
 # =========================
 # BUILD INDEX
@@ -95,7 +93,7 @@ def build_index(pdf_path: str):
 def get_query_engine(index: VectorStoreIndex):
     """
     Creates a query engine with Reranking and updates the prompt template.
-    This function now correctly relies on st.session_state.prompt being set in the main script.
+    Relies on st.session_state.prompt being set in the main script.
     """
     retriever = VectorIndexRetriever(index=index, similarity_top_k=10)
 
@@ -109,8 +107,6 @@ def get_query_engine(index: VectorStoreIndex):
         node_postprocessors=[reranker],
     )
 
-    # --- FIX APPLIED HERE ---
-    # st.session_state.prompt must exist here, which is ensured by the fix below.
     engine.update_prompts(
         {"response_synthesizer:text_qa_template": st.session_state.prompt}
     )
@@ -132,7 +128,7 @@ st.markdown("---")
 init_models()
 
 
-# --- CRITICAL FIX: Initialize st.session_state.prompt outside of the cached function ---
+# Initialize st.session_state.prompt (Fix for the initial AttributeError)
 if "prompt" not in st.session_state:
     SYSTEM_PROMPT = (
         "You are a financial analyst.\n"
@@ -151,11 +147,11 @@ if "prompt" not in st.session_state:
             ),
         ]
     )
-# -------------------------------------------------------------------------------------
 
 
 with st.sidebar:
-   uploaded = st.file_uploader("Upload financial PDF", type="pdf", max_uploader_size=200 * 1024 * 1024)
+    # --- FINAL FIX: Removed max_uploader_size argument to fix TypeError ---
+    uploaded = st.file_uploader("Upload financial PDF", type="pdf")
 
 if uploaded:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -163,7 +159,6 @@ if uploaded:
         pdf_path = tmp.name
 
     with st.spinner("Indexing document…"):
-        # The engine depends on st.session_state.prompt, which is now guaranteed to exist
         index = build_index(pdf_path)
         st.session_state.engine = get_query_engine(index)
 
