@@ -3,6 +3,14 @@ import tempfile
 from pathlib import Path
 import streamlit as st
 import qdrant_client
+import nltk
+
+# Download NLTK data at startup (fixes the stopwords error)
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+    nltk.download('punkt', quiet=True)
 
 from llama_index.core import (
     VectorStoreIndex,
