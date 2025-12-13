@@ -1,31 +1,8 @@
-import nltk # <-- Ensure this import is here
-
-# =====================
-# NLTK FIX FOR STREAMLIT CLOUD
-# =====================
-@st.cache_resource
-def download_nltk_data():
-    """Forces NLTK to download necessary data files."""
-    try:
-        nltk.download('stopwords', quiet=True)
-    except Exception as e:
-        # Fail silently if download still restricted, hoping another part of the code handles it
-        print(f"NLTK Download failed: {e}")
-        
-# Call the fix immediately after imports, before any other logic
-download_nltk_data()
-
-# =====================
-# CONFIGURATION AND SECRETS
-# =====================
-# ... rest of your code ...
-
-
-
 import streamlit as st
 import os
 import tempfile
 from pathlib import Path
+import nltk # <--- NLTK FIX: Ensure this is imported early!
 
 # --- Core RAG Imports ---
 from llama_index.core import (
@@ -45,19 +22,34 @@ from llama_index.core.llms import ChatMessage
 from llama_index.core.embeddings import resolve_embed_model
 import qdrant_client
 
+
+# =====================
+# NLTK FIX FOR STREAMLIT CLOUD (MUST RUN BEFORE LlamaIndex calls NLTK)
+# =====================
+@st.cache_resource
+def download_nltk_data():
+    """Forces NLTK to download necessary data files."""
+    try:
+        # Use quiet=True to suppress output during deployment
+        nltk.download('stopwords', quiet=True)
+    except Exception as e:
+        print(f"NLTK Download failed: {e}")
+        
+download_nltk_data()
+
+
 # =====================
 # CONFIGURATION AND SECRETS
 # =====================
 
-# CRITICAL: These retrieve the keys set in your PowerShell environment ($env:KEY_NAME)
-# Ensure you set these in your terminal before running: $env:GROQ_API_KEY="..." etc.
+# CRITICAL: These retrieve the keys set in your Streamlit Cloud Secrets (.streamlit/secrets.toml)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
 
 COLLECTION_NAME = "financial-rag-final"
 EMBED_MODEL_NAME = "local:BAAI/bge-small-en-v1.5"
-# Note: Using SimpleDirectoryReader since Camelot/OpenCV were removed
+
 
 # =====================
 # INIT MODELS & RAG SETUP
@@ -82,7 +74,7 @@ def initialize_models():
         "1. Answer ONLY using the context provided in the retrieved documents.\n"
         "2. If the context does not contain the answer, state, 'The necessary financial data was not found in the report context.'\n"
         "3. You must CITE the page number from the document's metadata (labeled 'page_label') for every fact used. "
-        "Format the citation as:."
+        "Format the citation as:." # <-- CORRECTED FORMAT
     )
     st.session_state.chat_template = ChatPromptTemplate(
         message_templates=[
@@ -107,6 +99,7 @@ def build_index(pdf_path: str):
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
+        embed_dim=Settings.embed_model.get_text_embedding_dim(), # <-- FINAL EMBEDDING DIMENSION FIX
     )
 
     storage_context = StorageContext.from_defaults(
