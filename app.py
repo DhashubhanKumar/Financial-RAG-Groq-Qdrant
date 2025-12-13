@@ -1,3 +1,27 @@
+import nltk # <-- Ensure this import is here
+
+# =====================
+# NLTK FIX FOR STREAMLIT CLOUD
+# =====================
+@st.cache_resource
+def download_nltk_data():
+    """Forces NLTK to download necessary data files."""
+    try:
+        nltk.download('stopwords', quiet=True)
+    except Exception as e:
+        # Fail silently if download still restricted, hoping another part of the code handles it
+        print(f"NLTK Download failed: {e}")
+        
+# Call the fix immediately after imports, before any other logic
+download_nltk_data()
+
+# =====================
+# CONFIGURATION AND SECRETS
+# =====================
+# ... rest of your code ...
+
+
+
 import streamlit as st
 import os
 import tempfile
