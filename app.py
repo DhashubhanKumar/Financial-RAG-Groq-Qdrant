@@ -87,7 +87,7 @@ def build_index(pdf_path: str):
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
-        embed_dim=Settings.embed_model.get_text_embedding_dim(),
+        enable_hybrid=True,
     )
 
     storage_context = StorageContext.from_defaults(
