@@ -73,7 +73,10 @@ def build_index(pdf_path: str):
     client = qdrant_client.QdrantClient(
         url=f"https://{QDRANT_ENDPOINT}",
         api_key=QDRANT_API_KEY,
-        timeout=60,
+        prefer_grpc=False,
+        timeout=60,  # Increased timeout
+        # CRITICAL FIX for Pydantic Validation Errors:
+        disable_retrieval_validation=True 
     )
 
     # 🔥 HARD RESET COLLECTION (FIXES ALL QDRANT ERRORS)
