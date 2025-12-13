@@ -1,63 +1,73 @@
-import os
-os.environ["NLTK_DATA"] = "/tmp/nltk"
-
-import nltk
-try:
-    nltk.data.find("corpora/stopwords")
-except LookupError:
-    nltk.download("stopwords", download_dir="/tmp/nltk", quiet=True)
-
 import streamlit as st
+import os
 import tempfile
 from pathlib import Path
+
+import nltk
 import qdrant_client
 
-from llama_index import (
+from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
     Settings,
 )
 from llama_index.llms.groq import Groq
 from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.storage.storage_context import StorageContext
-from llama_index.retrievers import VectorIndexRetriever
-from llama_index.query_engine import RetrieverQueryEngine
-from llama_index.prompts import ChatPromptTemplate
-from llama_index.llms import ChatMessage, MessageRole
+from llama_index.core.storage import StorageContext
+from llama_index.core.retrievers import VectorIndexRetriever
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.prompts import ChatPromptTemplate, MessageRole
+from llama_index.core.llms import ChatMessage
 
 
-# =====================
-# SECRETS
-# =====================
-
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
-QDRANT_ENDPOINT = os.environ["QDRANT_ENDPOINT"]
-QDRANT_API_KEY = os.environ["QDRANT_API_KEY"]
-
-COLLECTION_NAME = "financial-rag-final"
-
-
-# =====================
-# INIT
-# =====================
-
+# ===============================
+# FIX NLTK PERMISSION ERROR
+# ===============================
 @st.cache_resource
-def init_models():
+def setup_nltk():
+    nltk.data.path.append("/tmp/nltk_data")
+    nltk.download("stopwords", download_dir="/tmp/nltk_data", quiet=True)
+
+setup_nltk()
+
+
+# ===============================
+# SECRETS
+# ===============================
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
+QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
+
+COLLECTION_NAME = "financial_rag_streamlit"
+
+
+# ===============================
+# INIT MODELS
+# ===============================
+@st.cache_resource
+def initialize_models():
+    if not GROQ_API_KEY:
+        st.error("GROQ_API_KEY not found")
+        st.stop()
+
+    # LLM
     Settings.llm = Groq(
         model="llama-3.1-8b-instant",
         api_key=GROQ_API_KEY,
     )
 
-    st.session_state.prompt = ChatPromptTemplate(
+    # IMPORTANT: use default embeddings (cloud-safe)
+    Settings.embed_model = None
+
+    SYSTEM_PROMPT = (
+        "You are a financial analyst.\n"
+        "Answer ONLY using the document context.\n"
+        "If the answer is not present, say so clearly."
+    )
+
+    st.session_state.chat_template = ChatPromptTemplate(
         message_templates=[
-            ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=(
-                    "You are a financial analyst. "
-                    "Answer ONLY from the provided document context. "
-                    "If not found, say so. Cite page numbers using page_label."
-                ),
-            ),
+            ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
             ChatMessage(
                 role=MessageRole.USER,
                 content="Context:\n{context_str}\n\nQuestion:\n{query_str}",
@@ -65,23 +75,17 @@ def init_models():
         ]
     )
 
-init_models()
 
-
-# =====================
-# INDEX
-# =====================
-
+# ===============================
+# INDEX BUILDING
+# ===============================
 def build_index(pdf_path: str):
     client = qdrant_client.QdrantClient(
         url=f"https://{QDRANT_ENDPOINT}",
         api_key=QDRANT_API_KEY,
+        prefer_grpc=False,
+        timeout=60,
     )
-
-    try:
-        client.delete_collection(COLLECTION_NAME)
-    except Exception:
-        pass
 
     vector_store = QdrantVectorStore(
         client=client,
@@ -99,44 +103,82 @@ def build_index(pdf_path: str):
     return VectorStoreIndex.from_documents(
         docs,
         storage_context=storage_context,
+        show_progress=True,
     )
 
 
-def make_query_engine(index):
-    retriever = VectorIndexRetriever(index=index, similarity_top_k=8)
-
-    engine = RetrieverQueryEngine(retriever=retriever)
-    engine.update_prompts(
-        {"response_synthesizer:text_qa_template": st.session_state.prompt}
+def get_query_engine(index):
+    retriever = VectorIndexRetriever(
+        index=index,
+        similarity_top_k=8,
     )
-    return engine
+
+    query_engine = RetrieverQueryEngine(
+        retriever=retriever,
+    )
+
+    query_engine.update_prompts(
+        {"response_synthesizer:text_qa_template": st.session_state.chat_template}
+    )
+
+    return query_engine
 
 
-# =====================
-# UI
-# =====================
+# ===============================
+# STREAMLIT UI
+# ===============================
+st.set_page_config(
+    page_title="Financial RAG Analyst (Groq + Qdrant)",
+    layout="wide",
+)
 
-st.set_page_config("Financial RAG Analyst", layout="wide")
 st.title("📊 Financial RAG Analyst (Groq + Qdrant)")
 st.markdown("---")
 
-uploaded = st.file_uploader("Upload a financial PDF", type="pdf")
+initialize_models()
 
-if uploaded:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
-        f.write(uploaded.read())
-        path = f.name
+with st.sidebar:
+    st.header("Upload Financial Report")
+    uploaded_file = st.file_uploader(
+        "Upload a 10-K / Annual Report (PDF)",
+        type="pdf",
+    )
 
-    with st.spinner("Indexing document…"):
-        st.session_state.index = build_index(path)
-        st.session_state.engine = make_query_engine(st.session_state.index)
+query_enabled = False
 
-    os.unlink(path)
-    st.success("✅ Document indexed!")
+if uploaded_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(uploaded_file.read())
+        pdf_path = tmp.name
 
-if "engine" in st.session_state:
-    q = st.text_input("Ask a question")
-    if q:
-        with st.spinner("Thinking…"):
-            res = st.session_state.engine.query(q)
-        st.markdown(res.response)
+    if "indexed" not in st.session_state:
+        with st.spinner("Indexing document (first time only)..."):
+            st.session_state.index = build_index(pdf_path)
+            st.session_state.query_engine = get_query_engine(
+                st.session_state.index
+            )
+            st.session_state.indexed = True
+
+        st.success("✅ Document indexed successfully")
+
+    query_enabled = True
+
+    os.unlink(pdf_path)
+
+else:
+    st.info("Upload a PDF to begin")
+
+user_query = st.text_input(
+    "Ask a question about the report:",
+    disabled=not query_enabled,
+)
+
+if user_query and query_enabled:
+    with st.spinner("Analyzing..."):
+        response = st.session_state.query_engine.query(user_query)
+
+    st.markdown(
+        f"""
+        <div style="background:#1a1a1a;padding:20px;border-radius:12px">
+            <h3>Answer</h3>
+            <p>{response.response}</p>
