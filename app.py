@@ -1,8 +1,20 @@
-import streamlit as st
+# -----------------------------
+# MUST BE AT THE VERY TOP
+# -----------------------------
 import os
+os.environ["NLTK_DATA"] = "/tmp/nltk_data"
+
+import nltk
+nltk.data.path.append("/tmp/nltk_data")
+nltk.download("punkt", quiet=True)
+nltk.download("stopwords", quiet=True)
+
+# -----------------------------
+# NOW SAFE TO IMPORT EVERYTHING
+# -----------------------------
+import streamlit as st
 import tempfile
 from pathlib import Path
-import nltk
 import qdrant_client
 
 from llama_index.core import (
@@ -19,20 +31,9 @@ from llama_index.core.prompts import ChatPromptTemplate, MessageRole
 from llama_index.core.llms import ChatMessage
 
 
-# -----------------------
-# FIX NLTK PERMISSIONS
-# -----------------------
-@st.cache_resource
-def setup_nltk():
-    nltk.data.path.append("/tmp/nltk_data")
-    nltk.download("stopwords", download_dir="/tmp/nltk_data", quiet=True)
-
-setup_nltk()
-
-
-# -----------------------
+# -----------------------------
 # SECRETS
-# -----------------------
+# -----------------------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
@@ -40,9 +41,9 @@ QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
 COLLECTION_NAME = "financial_rag_streamlit"
 
 
-# -----------------------
+# -----------------------------
 # INIT MODELS
-# -----------------------
+# -----------------------------
 @st.cache_resource
 def init_models():
     if not GROQ_API_KEY:
@@ -54,10 +55,9 @@ def init_models():
         api_key=GROQ_API_KEY,
     )
 
-    # IMPORTANT: default embedding (cloud safe)
     Settings.embed_model = None
 
-    prompt = ChatPromptTemplate(
+    st.session_state.prompt = ChatPromptTemplate(
         message_templates=[
             ChatMessage(
                 role=MessageRole.SYSTEM,
@@ -70,12 +70,10 @@ def init_models():
         ]
     )
 
-    st.session_state.prompt = prompt
 
-
-# -----------------------
+# -----------------------------
 # BUILD INDEX
-# -----------------------
+# -----------------------------
 def build_index(pdf_path: str):
     client = qdrant_client.QdrantClient(
         url=f"https://{QDRANT_ENDPOINT}",
@@ -88,7 +86,9 @@ def build_index(pdf_path: str):
         collection_name=COLLECTION_NAME,
     )
 
-    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    storage_context = StorageContext.from_defaults(
+        vector_store=vector_store
+    )
 
     docs = SimpleDirectoryReader(
         input_files=[Path(pdf_path)]
@@ -102,18 +102,16 @@ def build_index(pdf_path: str):
 
 def get_query_engine(index):
     retriever = VectorIndexRetriever(index=index, similarity_top_k=8)
-
     engine = RetrieverQueryEngine(retriever=retriever)
     engine.update_prompts(
         {"response_synthesizer:text_qa_template": st.session_state.prompt}
     )
-
     return engine
 
 
-# -----------------------
+# -----------------------------
 # UI
-# -----------------------
+# -----------------------------
 st.set_page_config(page_title="Financial RAG Analyst", layout="wide")
 st.title("📊 Financial RAG Analyst (Groq + Qdrant)")
 st.markdown("---")
@@ -121,7 +119,7 @@ st.markdown("---")
 init_models()
 
 with st.sidebar:
-    uploaded = st.file_uploader("Upload a financial PDF", type="pdf")
+    uploaded = st.file_uploader("Upload financial PDF", type="pdf")
 
 if uploaded:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -132,18 +130,15 @@ if uploaded:
         with st.spinner("Indexing document..."):
             index = build_index(pdf_path)
             st.session_state.engine = get_query_engine(index)
-
-        st.success("Document indexed")
+        st.success("Document indexed successfully")
 
     os.unlink(pdf_path)
 
-    question = st.text_input("Ask a question")
+    q = st.text_input("Ask a question")
 
-    if question:
+    if q:
         with st.spinner("Analyzing..."):
-            response = st.session_state.engine.query(question)
-
-        st.markdown(f"### Answer\n{response.response}")
-
+            res = st.session_state.engine.query(q)
+        st.markdown(f"### Answer\n{res.response}")
 else:
     st.info("Upload a PDF to begin")
