@@ -28,7 +28,7 @@ import qdrant_client
 # =====================
 @st.cache_resource
 def download_nltk_data():
-    """Forces NLTK to download necessary data files."""
+    """Forces NLTK to download necessary data files to bypass permission errors."""
     try:
         # Use quiet=True to suppress output during deployment
         nltk.download('stopwords', quiet=True)
@@ -74,7 +74,7 @@ def initialize_models():
         "1. Answer ONLY using the context provided in the retrieved documents.\n"
         "2. If the context does not contain the answer, state, 'The necessary financial data was not found in the report context.'\n"
         "3. You must CITE the page number from the document's metadata (labeled 'page_label') for every fact used. "
-        "Format the citation as:." # <-- CORRECTED FORMAT
+        "Format the citation as:."
     )
     st.session_state.chat_template = ChatPromptTemplate(
         message_templates=[
@@ -99,7 +99,7 @@ def build_index(pdf_path: str):
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
-        embed_dim=Settings.embed_model.get_text_embedding_dim(), # <-- FINAL EMBEDDING DIMENSION FIX
+        embed_dim=Settings.embed_model.get_text_embedding_dim(), # <--- FINAL EMBEDDING DIMENSION FIX
     )
 
     storage_context = StorageContext.from_defaults(
