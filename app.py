@@ -26,6 +26,7 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.prompts import ChatPromptTemplate, MessageRole
 from llama_index.core.llms import ChatMessage
 
+
 # =====================
 # CONFIG
 # =====================
@@ -35,6 +36,7 @@ QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
 
 COLLECTION_NAME = "financial-rag-final"
+
 
 # =====================
 # INIT MODELS
@@ -51,7 +53,7 @@ def initialize_models():
         "You are a financial analyst.\n"
         "Rules:\n"
         "1. Answer ONLY using document context.\n"
-        "2. If answer is missing, say so.\n"
+        "2. If answer not found, say so.\n"
         "3. Cite page numbers using 'page_label'."
     )
 
@@ -66,6 +68,7 @@ def initialize_models():
     )
 
 initialize_models()
+
 
 # =====================
 # INDEXING
@@ -102,6 +105,7 @@ def build_index(pdf_path: str):
         storage_context=storage_context,
     )
 
+
 def get_query_engine(index):
     retriever = VectorIndexRetriever(
         index=index,
@@ -117,6 +121,7 @@ def get_query_engine(index):
     )
 
     return query_engine
+
 
 # =====================
 # UI
