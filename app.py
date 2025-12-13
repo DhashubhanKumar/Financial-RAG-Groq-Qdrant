@@ -1,14 +1,5 @@
-# =====================
-# 🔥 CRITICAL CLOUD FIX (MUST BE FIRST)
-# =====================
-import os
-os.environ["LLAMA_INDEX_DISABLE_NLTK"] = "1"
-os.environ["NLTK_DATA"] = "/tmp/nltk_data"
-
-# =====================
-# STANDARD IMPORTS
-# =====================
 import streamlit as st
+import os
 import tempfile
 from pathlib import Path
 
@@ -20,7 +11,6 @@ from llama_index.core import (
     Settings,
 )
 from llama_index.llms.groq import Groq
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core.storage import StorageContext
 from llama_index.core.retrievers import VectorIndexRetriever
@@ -30,37 +20,36 @@ from llama_index.core.prompts import ChatPromptTemplate, MessageRole
 from llama_index.core.llms import ChatMessage
 
 # =====================
-# CONFIGURATION & SECRETS
+# CONFIGURATION
 # =====================
+
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
 
+# IMPORTANT: change this if you want to keep old data
 COLLECTION_NAME = "financial-rag-final"
 
 # =====================
-# INITIALIZE MODELS
+# MODEL INITIALIZATION
 # =====================
+
 @st.cache_resource
 def initialize_models():
     if not GROQ_API_KEY:
-        st.error("❌ GROQ_API_KEY missing in Streamlit secrets")
-        st.stop()
+        st.error("GROQ_API_KEY not found in environment variables")
+        return None
 
     Settings.llm = Groq(
         model="llama-3.1-8b-instant",
         api_key=GROQ_API_KEY,
     )
 
-    Settings.embed_model = HuggingFaceEmbedding(
-        model_name="BAAI/bge-small-en-v1.5"
-    )
-
     SYSTEM_PROMPT = (
         "You are a highly skilled financial analyst.\n"
         "Rules:\n"
-        "1. Answer ONLY using the retrieved document context.\n"
-        "2. If information is missing, say so clearly.\n"
+        "1. Answer ONLY using the provided document context.\n"
+        "2. If the answer is not present, say so clearly.\n"
         "3. Cite page numbers using metadata field 'page_label'."
     )
 
@@ -74,9 +63,12 @@ def initialize_models():
         ]
     )
 
+    return Settings.llm
+
 # =====================
-# INDEX BUILDING
+# INDEX CREATION
 # =====================
+
 def build_index(pdf_path: str):
     client = qdrant_client.QdrantClient(
         url=f"https://{QDRANT_ENDPOINT}",
@@ -84,10 +76,16 @@ def build_index(pdf_path: str):
         timeout=60,
     )
 
+    # 🔥 HARD RESET COLLECTION (FIXES ALL QDRANT ERRORS)
+    try:
+        client.delete_collection(collection_name=COLLECTION_NAME)
+    except Exception:
+        pass
+
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
-        enable_hybrid=True,
+        enable_hybrid=True,  # fastembed
     )
 
     storage_context = StorageContext.from_defaults(
@@ -101,7 +99,6 @@ def build_index(pdf_path: str):
     return VectorStoreIndex.from_documents(
         documents,
         storage_context=storage_context,
-        show_progress=True,
     )
 
 def get_query_engine(index: VectorStoreIndex):
@@ -129,9 +126,15 @@ def get_query_engine(index: VectorStoreIndex):
 # =====================
 # STREAMLIT UI
 # =====================
+
 st.set_page_config(
     page_title="Financial RAG Analyst (Groq + Qdrant)",
     layout="wide",
+)
+
+st.markdown(
+    "<style>body{background:#000;color:#fff;}</style>",
+    unsafe_allow_html=True,
 )
 
 st.title("📊 Financial RAG Analyst (Groq + Qdrant)")
@@ -153,18 +156,15 @@ if uploaded_file:
         tmp.write(uploaded_file.read())
         pdf_path = tmp.name
 
-    if st.session_state.get("current_file") != uploaded_file.name:
-        st.session_state.current_file = uploaded_file.name
-
-        with st.spinner("Indexing document (first time only)..."):
-            st.session_state.index = build_index(pdf_path)
-            st.session_state.query_engine = get_query_engine(
-                st.session_state.index
-            )
-
-        st.success("✅ Document indexed and ready!")
+    with st.spinner("Indexing document (first time only)..."):
+        st.session_state.index = build_index(pdf_path)
+        st.session_state.query_engine = get_query_engine(
+            st.session_state.index
+        )
 
     query_enabled = True
+    st.success("✅ Document indexed and ready!")
+
     os.unlink(pdf_path)
 
 else:
