@@ -5,23 +5,25 @@ import streamlit as st
 import qdrant_client
 import nltk
 
-# Download NLTK data at startup (fixes the stopwords error)
+# Set NLTK data path and download required data
+os.environ['NLTK_DATA'] = '/tmp/nltk_data'
+nltk.data.path.append('/tmp/nltk_data')
+
 try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
-    nltk.download('stopwords', quiet=True)
-    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True, download_dir='/tmp/nltk_data')
+    nltk.download('punkt', quiet=True, download_dir='/tmp/nltk_data')
 
+# Now import llama_index modules
 from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
     Settings,
 )
 from llama_index.llms.groq import Groq
-try:
-    from llama_index.embeddings.fastembed import FastEmbedEmbedding
-except ImportError:
-    from llama_index.embeddings import FastEmbedEmbedding
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
+# ... rest of imports
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.core.retrievers import VectorIndexRetriever
