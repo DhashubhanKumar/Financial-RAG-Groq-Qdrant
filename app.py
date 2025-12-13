@@ -14,43 +14,37 @@ from llama_index.llms.groq import Groq
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core.storage import StorageContext
 from llama_index.core.retrievers import VectorIndexRetriever
-from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.prompts import ChatPromptTemplate, MessageRole
 from llama_index.core.llms import ChatMessage
 
 # =====================
-# CONFIGURATION
+# CONFIG
 # =====================
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 QDRANT_ENDPOINT = os.environ.get("QDRANT_ENDPOINT")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
 
-# IMPORTANT: change this if you want to keep old data
 COLLECTION_NAME = "financial-rag-final"
 
 # =====================
-# MODEL INITIALIZATION
+# INIT MODELS
 # =====================
 
 @st.cache_resource
 def initialize_models():
-    if not GROQ_API_KEY:
-        st.error("GROQ_API_KEY not found in environment variables")
-        return None
-
     Settings.llm = Groq(
         model="llama-3.1-8b-instant",
         api_key=GROQ_API_KEY,
     )
 
     SYSTEM_PROMPT = (
-        "You are a highly skilled financial analyst.\n"
+        "You are a financial analyst.\n"
         "Rules:\n"
-        "1. Answer ONLY using the provided document context.\n"
-        "2. If the answer is not present, say so clearly.\n"
-        "3. Cite page numbers using metadata field 'page_label'."
+        "1. Answer ONLY from document context.\n"
+        "2. If not found, say so.\n"
+        "3. Cite page numbers using 'page_label'."
     )
 
     st.session_state.chat_template = ChatPromptTemplate(
@@ -63,25 +57,22 @@ def initialize_models():
         ]
     )
 
-    return Settings.llm
+initialize_models()
 
 # =====================
-# INDEX CREATION
+# INDEXING
 # =====================
 
 def build_index(pdf_path: str):
     client = qdrant_client.QdrantClient(
         url=f"https://{QDRANT_ENDPOINT}",
         api_key=QDRANT_API_KEY,
-        prefer_grpc=False,
-        timeout=60,  # Increased timeout
-        # CRITICAL FIX for Pydantic Validation Errors:
-        disable_retrieval_validation=True 
+        timeout=60,
     )
 
-    # 🔥 HARD RESET COLLECTION (FIXES ALL QDRANT ERRORS)
+    # HARD RESET COLLECTION (fixes all dimension/config issues)
     try:
-        client.delete_collection(collection_name=COLLECTION_NAME)
+        client.delete_collection(COLLECTION_NAME)
     except Exception:
         pass
 
@@ -95,29 +86,23 @@ def build_index(pdf_path: str):
         vector_store=vector_store
     )
 
-    documents = SimpleDirectoryReader(
+    docs = SimpleDirectoryReader(
         input_files=[Path(pdf_path)]
     ).load_data()
 
     return VectorStoreIndex.from_documents(
-        documents,
+        docs,
         storage_context=storage_context,
     )
 
-def get_query_engine(index: VectorStoreIndex):
+def get_query_engine(index):
     retriever = VectorIndexRetriever(
         index=index,
-        similarity_top_k=10,
-    )
-
-    reranker = SentenceTransformerRerank(
-        model="cross-encoder/ms-marco-MiniLM-L-6-v2",
-        top_n=3,
+        similarity_top_k=8,
     )
 
     query_engine = RetrieverQueryEngine(
-        retriever=retriever,
-        node_postprocessors=[reranker],
+        retriever=retriever
     )
 
     query_engine.update_prompts(
@@ -127,30 +112,15 @@ def get_query_engine(index: VectorStoreIndex):
     return query_engine
 
 # =====================
-# STREAMLIT UI
+# UI
 # =====================
 
-st.set_page_config(
-    page_title="Financial RAG Analyst (Groq + Qdrant)",
-    layout="wide",
-)
-
-st.markdown(
-    "<style>body{background:#000;color:#fff;}</style>",
-    unsafe_allow_html=True,
-)
-
+st.set_page_config(page_title="Financial RAG Analyst", layout="wide")
 st.title("📊 Financial RAG Analyst (Groq + Qdrant)")
 st.markdown("---")
 
-initialize_models()
-
 with st.sidebar:
-    st.header("Upload Financial Report")
-    uploaded_file = st.file_uploader(
-        "Upload a 10-K, 20-F, or Annual Report PDF",
-        type="pdf",
-    )
+    uploaded_file = st.file_uploader("Upload financial PDF", type="pdf")
 
 query_enabled = False
 
@@ -159,33 +129,32 @@ if uploaded_file:
         tmp.write(uploaded_file.read())
         pdf_path = tmp.name
 
-    with st.spinner("Indexing document (first time only)..."):
+    with st.spinner("Indexing document..."):
         st.session_state.index = build_index(pdf_path)
         st.session_state.query_engine = get_query_engine(
             st.session_state.index
         )
 
     query_enabled = True
-    st.success("✅ Document indexed and ready!")
+    st.success("✅ Document indexed!")
 
     os.unlink(pdf_path)
 
 else:
     st.info("Upload a PDF to begin.")
 
-user_query = st.text_input(
-    "Ask a question about the report:",
-    placeholder="e.g. What was the total revenue in 2023?",
-    disabled=not query_enabled,
+query = st.text_input(
+    "Ask a question:",
+    disabled=not query_enabled
 )
 
-if user_query and query_enabled:
+if query and query_enabled:
     with st.spinner("Analyzing..."):
-        response = st.session_state.query_engine.query(user_query)
+        response = st.session_state.query_engine.query(query)
 
     st.markdown(
         f"""
-        <div style="background:#1a1a1a;padding:20px;border-radius:12px">
+        <div style="background:#1a1a1a;padding:20px;border-radius:10px">
             <h3>Answer</h3>
             <p>{response.response}</p>
         </div>
