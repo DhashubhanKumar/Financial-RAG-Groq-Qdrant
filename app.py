@@ -18,7 +18,10 @@ from llama_index.core import (
     Settings,
 )
 from llama_index.llms.groq import Groq
-from llama_index.embeddings.fastembed import FastEmbedEmbedding
+try:
+    from llama_index.embeddings.fastembed import FastEmbedEmbedding
+except ImportError:
+    from llama_index.embeddings import FastEmbedEmbedding
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.core.retrievers import VectorIndexRetriever
