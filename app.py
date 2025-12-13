@@ -1,5 +1,13 @@
-import streamlit as st
 import os
+os.environ["NLTK_DATA"] = "/tmp/nltk_data"
+
+import nltk
+try:
+    nltk.data.find("corpora/stopwords")
+except LookupError:
+    nltk.download("stopwords", download_dir="/tmp/nltk_data", quiet=True)
+
+import streamlit as st
 import tempfile
 from pathlib import Path
 
@@ -42,8 +50,8 @@ def initialize_models():
     SYSTEM_PROMPT = (
         "You are a financial analyst.\n"
         "Rules:\n"
-        "1. Answer ONLY from document context.\n"
-        "2. If not found, say so.\n"
+        "1. Answer ONLY using document context.\n"
+        "2. If answer is missing, say so.\n"
         "3. Cite page numbers using 'page_label'."
     )
 
@@ -70,7 +78,6 @@ def build_index(pdf_path: str):
         timeout=60,
     )
 
-    # HARD RESET COLLECTION (fixes all dimension/config issues)
     try:
         client.delete_collection(COLLECTION_NAME)
     except Exception:
@@ -79,7 +86,7 @@ def build_index(pdf_path: str):
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
-        enable_hybrid=True,  # fastembed
+        enable_hybrid=True,
     )
 
     storage_context = StorageContext.from_defaults(
