@@ -1,69 +1,62 @@
 # 📊 Financial RAG Analyst (Groq + Qdrant)
 
-This project is a high-performance, full-stack RAG application engineered to analyze complex regulatory filings (like 10-K reports). It delivers verifiable, sub-second query responses by integrating advanced multi-modal processing and cloud-hardened infrastructure.
+A high-performance, full-stack **Retrieval-Augmented Generation (RAG)** application designed to analyze complex financial and regulatory documents such as **10-K filings**.  
+The system delivers **verifiable, sub-second responses** by combining high-speed inference, advanced retrieval pipelines, and cloud-native vector storage.
 
-## 🚀 Key Features and Architecture
+---
 
-The system is built to excel where basic RAG fails, focusing on speed, accuracy, and handling complex data types. 
+## 🚀 Key Features & Architecture
 
-| Feature | Libraries Used | Technical Achievement |
-| :--- | :--- | :--- |
-| **Multi-Modal Ingestion** | `Camelot`, `OpenCV` | Extracts both **structured tables** and **unstructured text** from PDFs for a unified knowledge graph. |
-| **High-Speed Inference** | `Groq` | Utilizes **Llama-3.1-8B-Instant** for industry-leading, sub-second query latency. |
-| **Advanced Retrieval** | `LlamaIndex`, `SentenceTransformer` | Implements a **Cross-Encoder Re-ranker** (`ms-marco-MiniLM-L-6-v2`) to ensure the LLM receives only the top-3 most relevant context chunks, maximizing precision. |
-| **Trust Layer & Guardrails** | Custom Prompt | Enforces a strict system prompt mandating **source citation** (``) and a **Hallucination Guardrail** for auditable results. |
-| **Persistent Vector Store** | `Qdrant Cloud` | Scalable cloud backend for embeddings, ensuring data stability and retrieval performance. |
-
-## 🛠️ Setup and Local Installation
-
-### 1. Prerequisites
-
-* **Python 3.11** (Critical for dependency stability)
-* **Git**
-
-### 2. Clone the Repository & Install Dependencies
-
-```bash
-git clone [https://github.com/DhashubhanKumar/Financial-RAG-Groq-Qdrant.git](https://github.com/DhashubhanKumar/Financial-RAG-Groq-Qdrant.git)
-cd Financial-RAG-Groq-Qdrant
-python -m venv venv
-# Activate the environment
-# Install pinned dependencies
-pip install -r requirements.txt
-(fill ur api keys
-Here is the single, ready-to-copy-paste README.md file for your project.Markdown# 📊 Financial RAG Analyst (Groq + Qdrant)
-
-This project is a high-performance, full-stack RAG application engineered to analyze complex regulatory filings (like 10-K reports). It delivers verifiable, sub-second query responses by integrating advanced multi-modal processing and cloud-hardened infrastructure.
-
-## 🚀 Key Features and Architecture
-
-The system is built to excel where basic RAG fails, focusing on speed, accuracy, and handling complex data types. 
+This system is purpose-built to overcome common RAG failures related to latency, hallucination, and poor retrieval quality.
 
 | Feature | Libraries Used | Technical Achievement |
-| :--- | :--- | :--- |
-| **Multi-Modal Ingestion** | `Camelot`, `OpenCV` | Extracts both **structured tables** and **unstructured text** from PDFs for a unified knowledge graph. |
-| **High-Speed Inference** | `Groq` | Utilizes **Llama-3.1-8B-Instant** for industry-leading, sub-second query latency. |
-| **Advanced Retrieval** | `LlamaIndex`, `SentenceTransformer` | Implements a **Cross-Encoder Re-ranker** (`ms-marco-MiniLM-L-6-v2`) to ensure the LLM receives only the top-3 most relevant context chunks, maximizing precision. |
-| **Trust Layer & Guardrails** | Custom Prompt | Enforces a strict system prompt mandating **source citation** (``) and a **Hallucination Guardrail** for auditable results. |
-| **Persistent Vector Store** | `Qdrant Cloud` | Scalable cloud backend for embeddings, ensuring data stability and retrieval performance. |
+|------|---------------|----------------------|
+| **Multi-Modal Ingestion** | `Camelot`, `OpenCV` | Extracts both **structured tables** and **unstructured text** from PDFs into a unified knowledge base |
+| **High-Speed Inference** | `Groq` | Uses **Llama-3.1-8B-Instant** for industry-leading sub-second inference |
+| **Advanced Retrieval** | `LlamaIndex`, `SentenceTransformers` | Implements a **Cross-Encoder Re-ranker** (`ms-marco-MiniLM-L-6-v2`) to select the top-3 most relevant chunks |
+| **Trust Layer & Guardrails** | Custom System Prompt | Enforces **mandatory source citation** and includes a **hallucination guardrail** |
+| **Persistent Vector Store** | `Qdrant Cloud` | Cloud-hosted vector database ensuring scalable, durable embeddings |
 
-## 🛠️ Setup and Local Installation
+---
 
-### 1. Prerequisites
+## 🛠️ Setup & Local Installation
 
-* **Python 3.11** (Critical for dependency stability)
-* **Git**
+### 1️⃣ Prerequisites
 
-### 2. Clone the Repository & Install Dependencies
+- **Python 3.11** (important for dependency stability)
+- **Git**
+
+---
+
+### 2️⃣ Clone the Repository
 
 ```bash
-git clone [https://github.com/DhashubhanKumar/Financial-RAG-Groq-Qdrant.git](https://github.com/DhashubhanKumar/Financial-RAG-Groq-Qdrant.git)
+git clone https://github.com/DhashubhanKumar/Financial-RAG-Groq-Qdrant.git
 cd Financial-RAG-Groq-Qdrant
+
+
 python -m venv venv
+
 # Activate the environment
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+
 # Install pinned dependencies
 pip install -r requirements.txt
-# Configure Environment Variables (Secrets)For local testing, set these variables in your terminal. For Streamlit Cloud deployment, use the .streamlit/secrets.toml file.VariablePurposeGROQ_API_KEYAPI key for high-speed LLM inference.QDRANT_ENDPOINTYour Qdrant Cloud cluster address.QDRANT_API_KEYAPI key for secure access to the vector store
+export GROQ_API_KEY="your_groq_api_key"
+export QDRANT_ENDPOINT="your_qdrant_cloud_endpoint"
+export QDRANT_API_KEY="your_qdrant_api_key"
 
-```bash
+
+.streamlit/secrets.toml
+
+
+GROQ_API_KEY = "your_groq_api_key"
+QDRANT_ENDPOINT = "your_qdrant_cloud_endpoint"
+QDRANT_API_KEY = "your_qdrant_api_key"
+
+
 streamlit run app.py
