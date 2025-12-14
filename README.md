@@ -62,5 +62,8 @@ cd Financial-RAG-Groq-Qdrant
 python -m venv venv
 # Activate the environment
 # Install pinned dependencies
-pip install -r requirements.txt Configure Environment Variables (Secrets)For local testing, set these variables in your terminal. For Streamlit Cloud deployment, use the .streamlit/secrets.toml file.VariablePurposeGROQ_API_KEYAPI key for high-speed LLM inference.QDRANT_ENDPOINTYour Qdrant Cloud cluster address.QDRANT_API_KEYAPI key for secure access to the vector store
+pip install -r requirements.txt
+# Configure Environment Variables (Secrets)For local testing, set these variables in your terminal. For Streamlit Cloud deployment, use the .streamlit/secrets.toml file.VariablePurposeGROQ_API_KEYAPI key for high-speed LLM inference.QDRANT_ENDPOINTYour Qdrant Cloud cluster address.QDRANT_API_KEYAPI key for secure access to the vector store
+
+```bash
 streamlit run app.py
